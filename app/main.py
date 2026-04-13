@@ -37,7 +37,7 @@ async def serve_image(path: str):
     if img_path.exists():
         return FileResponse(str(img_path))
     # Proxy from api.myl.cl
-    remote_url = f"https://api.myl.cl/static/illustrations/{path}"
+    remote_url = f"https://api.myl.cl/static/cards/{path}"
     async with httpx.AsyncClient(timeout=15.0) as client:
         try:
             resp = await client.get(remote_url)
