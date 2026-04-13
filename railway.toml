@@ -1,3 +1,4 @@
+# MyL Primer Bloque - Configuración Railway
 [build]
 builder = "DOCKERFILE"
 dockerfilePath = "Dockerfile"
