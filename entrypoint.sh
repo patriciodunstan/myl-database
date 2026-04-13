@@ -13,5 +13,5 @@ else
 fi
 
 echo "Starting server on port ${PORT:-8000}..."
-cd /app
-MYL_DB_PATH=$DB_PATH exec python -m uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}
+cd /app/app
+MYL_DB_PATH=$DB_PATH exec python -m uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}
