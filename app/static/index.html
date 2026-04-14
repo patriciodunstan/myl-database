@@ -2437,7 +2437,7 @@
         async function loadBanlist(format = 'racial_edicion') {
             try {
                 const data = await fetchAPI(`/banlist?format=${format}`);
-                return data;
+                return data.banlist || data || [];
             } catch (error) {
                 showToast('error', 'Error', 'No se pudo cargar la banlist');
                 return [];
