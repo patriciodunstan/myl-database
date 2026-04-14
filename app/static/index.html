@@ -2336,19 +2336,21 @@
         }
 
         async function loadCards(page = 1) {
-            const params = new URLSearchParams({
-                search: STATE.filters.search,
-                race: STATE.filters.race,
-                type: STATE.filters.type,
-                edition: STATE.filters.edition,
-                cost_min: STATE.filters.costMin || '',
-                cost_max: STATE.filters.costMax || '',
-                power_min: STATE.filters.powerMin || '',
-                power_max: STATE.filters.powerMax || '',
-                sort: STATE.filters.sort,
+            const paramsObj = {
                 page: page,
                 per_page: STATE.perPage
-            });
+            };
+
+            // Only add params that have values
+            if (STATE.filters.search) paramsObj.search = STATE.filters.search;
+            if (STATE.filters.race) paramsObj.race = STATE.filters.race;
+            if (STATE.filters.type) paramsObj.type = STATE.filters.type;
+            if (STATE.filters.edition) paramsObj.edition = STATE.filters.edition;
+            if (STATE.filters.costMin !== null) paramsObj.cost_min = STATE.filters.costMin;
+            if (STATE.filters.costMax !== null) paramsObj.cost_max = STATE.filters.costMax;
+            if (STATE.filters.sort) paramsObj.sort = STATE.filters.sort;
+
+            const params = new URLSearchParams(paramsObj);
 
             try {
                 const data = await fetchAPI(`/cartas?${params}`);
@@ -2371,9 +2373,9 @@
         async function loadEditions() {
             try {
                 const data = await fetchAPI('/ediciones');
-                STATE.editions = data;
+                STATE.editions = data.editions;
                 populateEditionFilter();
-                return data;
+                return data.editions;
             } catch (error) {
                 showToast('warning', 'Advertencia', 'No se pudieron cargar las ediciones');
                 return [];
@@ -2383,9 +2385,9 @@
         async function loadDecks() {
             try {
                 const data = await fetchAPI('/mazos');
-                STATE.decks = data;
+                STATE.decks = data.decks;
                 populateDeckSelectors();
-                return data;
+                return data.decks;
             } catch (error) {
                 showToast('error', 'Error', 'No se pudieron cargar los mazos');
                 return [];
@@ -2463,8 +2465,8 @@
             select.innerHTML = '<option value="">Todas</option>';
             STATE.editions.forEach(edition => {
                 const option = document.createElement('option');
-                option.value = edition.id;
-                option.textContent = edition.name;
+                option.value = edition.slug;
+                option.textContent = edition.title;
                 select.appendChild(option);
             });
         }
@@ -2505,8 +2507,8 @@
                     <div class="card-info">
                         <div class="card-name">${card.name}</div>
                         <div class="card-meta">
-                            <span class="card-badge type-${getTypeClass(card.type)}">${card.type}</span>
-                            ${card.race ? `<span class="card-badge">${card.race}</span>` : ''}
+                            <span class="card-badge type-${getTypeClass(card.type_name)}">${card.type_name}</span>
+                            ${card.race_name ? `<span class="card-badge">${card.race_name}</span>` : ''}
                         </div>
                     </div>
                 `;
@@ -2598,7 +2600,7 @@
             };
 
             STATE.currentDeck.cards.forEach(card => {
-                const type = card.card?.type || 'Otro';
+                const type = card.card?.type_name || 'Otro';
                 if (grouped[type]) {
                     grouped[type].push(card);
                 }
@@ -2652,7 +2654,7 @@
 
         function updateDeckStats() {
             const totalCards = STATE.currentDeck.cards.reduce((sum, card) => sum + card.quantity, 0);
-            const allyCards = STATE.currentDeck.cards.filter(c => c.card?.type === 'Aliado')
+            const allyCards = STATE.currentDeck.cards.filter(c => c.card?.type_name === 'Aliado')
                 .reduce((sum, card) => sum + card.quantity, 0);
 
             document.getElementById('total-cards-stat').querySelector('.deck-stat-value').textContent = totalCards;
@@ -2705,7 +2707,7 @@
                     >
                     <div class="compact-card-info">
                         <div class="compact-card-name">${card.name}</div>
-                        <div class="compact-card-meta">${card.type} - Coste: ${card.cost ?? '-'}</div>
+                        <div class="compact-card-meta">${card.type_name || 'Otro'} - Coste: ${card.cost ?? '-'}</div>
                     </div>
                     <div class="compact-card-actions">
                         <button class="btn btn-primary btn-sm" data-action="add-1" data-card-id="${card.id}">+1</button>
@@ -2787,18 +2789,32 @@
                 return;
             }
 
-            data.banlist.forEach(entry => {
+            banlist.forEach(entry => {
                 const row = document.createElement('tr');
-                const statusClass = entry.status === 'prohibited' ? 'prohibited' :
-                                  entry.status === 'limited' ? 'limited' : 'unrestricted';
-                const statusText = entry.status === 'prohibited' ? 'Prohibida' :
-                                 entry.status === 'limited' ? 'Limitada' : 'Sin restricción';
+                let statusClass, statusText, limitText;
+                if (entry.restriction === 'prohibida') {
+                    statusClass = 'prohibited';
+                    statusText = 'Prohibida';
+                    limitText = '0';
+                } else if (entry.restriction === 'limitada_1') {
+                    statusClass = 'limited';
+                    statusText = 'Limitada';
+                    limitText = '1';
+                } else if (entry.restriction === 'limitada_2') {
+                    statusClass = 'limited';
+                    statusText = 'Limitada';
+                    limitText = '2';
+                } else {
+                    statusClass = 'unrestricted';
+                    statusText = 'Sin restricción';
+                    limitText = '-';
+                }
 
                 row.innerHTML = `
                     <td>${entry.card_name}</td>
-                    <td>${entry.edition_name || '-'}</td>
+                    <td>${entry.edition || '-'}</td>
                     <td><span class="banlist-status ${statusClass}">${statusText}</span></td>
-                    <td>${entry.limit ?? '-'}</td>
+                    <td>${limitText}</td>
                 `;
                 tbody.appendChild(row);
             });
@@ -2844,20 +2860,20 @@
             costBadge.textContent = card.cost !== null ? `Coste: ${card.cost}` : 'Sin coste';
             costBadge.className = 'card-badge';
 
-            document.getElementById('modal-card-type').textContent = card.type;
-            document.getElementById('modal-card-type').className = `card-badge type-${getTypeClass(card.type)}`;
+            document.getElementById('modal-card-type').textContent = card.type_name;
+            document.getElementById('modal-card-type').className = `card-badge type-${getTypeClass(card.type_name)}`;
 
             const raceBadge = document.getElementById('modal-card-race');
-            if (card.race) {
-                raceBadge.textContent = card.race;
+            if (card.race_name) {
+                raceBadge.textContent = card.race_name;
                 raceBadge.style.display = 'inline-block';
             } else {
                 raceBadge.style.display = 'none';
             }
 
             const rarityBadge = document.getElementById('modal-card-rarity');
-            if (card.rarity) {
-                rarityBadge.textContent = card.rarity;
+            if (card.rarity_name) {
+                rarityBadge.textContent = card.rarity_name;
                 rarityBadge.style.display = 'inline-block';
             } else {
                 rarityBadge.style.display = 'none';
@@ -2866,8 +2882,8 @@
             // Stats
             document.getElementById('modal-stat-cost').textContent = card.cost ?? '-';
             document.getElementById('modal-stat-damage').textContent = card.damage ?? '-';
-            document.getElementById('modal-stat-power').textContent = card.power ?? '-';
-            document.getElementById('modal-stat-resistance').textContent = card.resistance ?? '-';
+            document.getElementById('modal-stat-power').textContent = '-';
+            document.getElementById('modal-stat-resistance').textContent = '-';
 
             // Ability
             const abilitySection = document.getElementById('modal-ability-section');
@@ -2882,11 +2898,11 @@
 
             // Edition
             const edition = STATE.editions.find(e => e.id === card.edition_id);
-            document.getElementById('modal-edition').textContent = edition ? edition.name : '-';
+            document.getElementById('modal-edition').textContent = edition ? edition.title : '-';
 
             // Stats section visibility
             const statsSection = document.getElementById('modal-stats-section');
-            const hasStats = card.cost !== null || card.damage !== null || card.power !== null || card.resistance !== null;
+            const hasStats = card.cost !== null || card.damage !== null;
             statsSection.style.display = hasStats ? 'block' : 'none';
 
             // Reset quantity
