@@ -2593,7 +2593,6 @@
                             loading="lazy"
                             onerror="this.onerror=null; this.src='${getCardFallback()}';"
                         >
-                        ${card.cost !== null ? `<span class="card-cost-badge">${card.cost}</span>` : ''}
                         ${card.printings && card.printings.length > 1 ? `<span class="editions-badge">${card.printings.length} eds.</span>` : ''}
                     </div>
                     <div class="card-info">
