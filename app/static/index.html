@@ -1774,6 +1774,7 @@
                     <button class="nav-tab" data-tab="deckbuilder">Constructor</button>
                     <button class="nav-tab" data-tab="simulator">Simulador</button>
                     <button class="nav-tab" data-tab="banlist">Banlist</button>
+                    <button class="nav-tab" data-tab="contacto">Contacto</button>
                 </nav>
             </div>
         </header>
@@ -2118,7 +2119,55 @@
                     <div id="banlist-updated" class="banlist-updated"></div>
                 </div>
             </section>
+            <!-- Tab 5: Contacto -->
+            <section id="contacto" class="tab-content">
+                <div class="banlist-container">
+                    <div class="banlist-header">
+                        <h2 class="banlist-title">Contacto & Sugerencias</h2>
+                    </div>
+                    <p style="color:var(--color-text-secondary);margin-bottom:var(--spacing-6);">
+                        ¿Encontraste un error, tenés una sugerencia o querés ponerte en contacto? Completá el formulario y lo revisamos.
+                    </p>
+                    <form id="contacto-form" style="max-width:560px;display:flex;flex-direction:column;gap:var(--spacing-4);">
+                        <div style="display:flex;flex-direction:column;gap:var(--spacing-2);">
+                            <label style="color:var(--color-text-secondary);font-size:var(--font-size-small);font-weight:var(--font-weight-medium);">Nombre *</label>
+                            <input id="contacto-nombre" type="text" placeholder="Tu nombre" required
+                                style="background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius-md);padding:var(--spacing-3) var(--spacing-4);color:var(--color-text-primary);font-size:var(--font-size-body);outline:none;">
+                        </div>
+                        <div style="display:flex;flex-direction:column;gap:var(--spacing-2);">
+                            <label style="color:var(--color-text-secondary);font-size:var(--font-size-small);font-weight:var(--font-weight-medium);">Email (opcional)</label>
+                            <input id="contacto-email" type="email" placeholder="tucorreo@ejemplo.com"
+                                style="background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius-md);padding:var(--spacing-3) var(--spacing-4);color:var(--color-text-primary);font-size:var(--font-size-body);outline:none;">
+                        </div>
+                        <div style="display:flex;flex-direction:column;gap:var(--spacing-2);">
+                            <label style="color:var(--color-text-secondary);font-size:var(--font-size-small);font-weight:var(--font-weight-medium);">Tipo</label>
+                            <select id="contacto-tipo"
+                                style="background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius-md);padding:var(--spacing-3) var(--spacing-4);color:var(--color-text-primary);font-size:var(--font-size-body);outline:none;">
+                                <option value="Sugerencia">Sugerencia</option>
+                                <option value="Consulta">Consulta</option>
+                                <option value="Reporte de error">Reporte de error</option>
+                                <option value="Otro">Otro</option>
+                            </select>
+                        </div>
+                        <div style="display:flex;flex-direction:column;gap:var(--spacing-2);">
+                            <label style="color:var(--color-text-secondary);font-size:var(--font-size-small);font-weight:var(--font-weight-medium);">Mensaje *</label>
+                            <textarea id="contacto-mensaje" rows="5" placeholder="Escribí tu mensaje acá..." required
+                                style="background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius-md);padding:var(--spacing-3) var(--spacing-4);color:var(--color-text-primary);font-size:var(--font-size-body);outline:none;resize:vertical;font-family:inherit;"></textarea>
+                        </div>
+                        <div>
+                            <button type="submit" id="contacto-submit"
+                                style="background:var(--color-accent);color:white;border:none;border-radius:var(--radius-md);padding:var(--spacing-3) var(--spacing-8);font-size:var(--font-size-body);font-weight:var(--font-weight-semibold);cursor:pointer;transition:background var(--transition-fast);">
+                                Enviar
+                            </button>
+                        </div>
+                        <div id="contacto-feedback" style="display:none;padding:var(--spacing-3) var(--spacing-4);border-radius:var(--radius-md);font-size:var(--font-size-small);"></div>
+                    </form>
+                </div>
+            </section>
         </main>
+        <footer style="text-align:center;padding:var(--spacing-4);color:var(--color-text-muted);font-size:var(--font-size-caption);border-top:1px solid var(--color-border);margin-top:auto;">
+            Creado por <strong style="color:var(--color-text-secondary);">patriciods_myl</strong>
+        </footer>
     </div>
 
     <!-- Card Detail Modal -->
@@ -3447,6 +3496,52 @@
 
             // Load banlist (will be displayed when tab is switched)
         }
+
+        // ========================================
+        // CONTACT FORM
+        // ========================================
+        document.getElementById('contacto-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const btn = document.getElementById('contacto-submit');
+            const feedback = document.getElementById('contacto-feedback');
+
+            const nombre = document.getElementById('contacto-nombre').value.trim();
+            const email = document.getElementById('contacto-email').value.trim();
+            const tipo = document.getElementById('contacto-tipo').value;
+            const mensaje = document.getElementById('contacto-mensaje').value.trim();
+
+            btn.disabled = true;
+            btn.textContent = 'Enviando...';
+            feedback.style.display = 'none';
+
+            try {
+                const resp = await fetch('/api/contacto', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ nombre, email, tipo, mensaje }),
+                });
+                if (resp.ok) {
+                    feedback.textContent = '¡Mensaje enviado! Gracias por tu feedback.';
+                    feedback.style.background = 'rgba(74,222,128,0.1)';
+                    feedback.style.color = 'var(--color-success)';
+                    feedback.style.border = '1px solid var(--color-success)';
+                    feedback.style.display = 'block';
+                    e.target.reset();
+                } else {
+                    const err = await resp.json();
+                    throw new Error(err.detail || 'Error al enviar');
+                }
+            } catch (err) {
+                feedback.textContent = `Error: ${err.message}`;
+                feedback.style.background = 'rgba(239,68,68,0.1)';
+                feedback.style.color = 'var(--color-error)';
+                feedback.style.border = '1px solid var(--color-error)';
+                feedback.style.display = 'block';
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Enviar';
+            }
+        });
 
         // Start the app
         document.addEventListener('DOMContentLoaded', init);

@@ -10,6 +10,9 @@ from fastapi.middleware.cors import CORSMiddleware
 import database as db
 import httpx
 
+NOTION_TOKEN = os.environ.get("NOTION_TOKEN", "")
+NOTION_FEEDBACK_DB_ID = os.environ.get("NOTION_FEEDBACK_DB_ID", "6bf46aba376b4256b655bb79295cda89")
+
 logging.basicConfig(
     level=logging.DEBUG,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
@@ -266,6 +269,51 @@ async def simular(body: dict):
         raise HTTPException(status_code=400, detail=result["error"])
     logger.info("POST /api/simular → hand=%d cartas, deck_size=%d", len(result.get("hand", [])), result.get("deck_size", 0))
     return result
+
+
+# ---- Contacto ----
+
+@app.post("/api/contacto")
+async def create_contacto(body: dict):
+    nombre = (body.get("nombre") or "").strip()
+    email = (body.get("email") or "").strip() or None
+    tipo = body.get("tipo") or "Otro"
+    mensaje = (body.get("mensaje") or "").strip()
+
+    if not nombre or not mensaje:
+        raise HTTPException(status_code=400, detail="Nombre y mensaje son requeridos")
+    if not NOTION_TOKEN:
+        raise HTTPException(status_code=503, detail="Servicio de contacto no configurado")
+
+    payload = {
+        "parent": {"database_id": NOTION_FEEDBACK_DB_ID},
+        "properties": {
+            "Nombre": {"title": [{"text": {"content": nombre}}]},
+            "Tipo": {"select": {"name": tipo}},
+            "Mensaje": {"rich_text": [{"text": {"content": mensaje}}]},
+            "Estado": {"select": {"name": "Nuevo"}},
+        },
+    }
+    if email:
+        payload["properties"]["Email"] = {"email": email}
+
+    logger.info("POST /api/contacto | nombre=%r tipo=%r", nombre, tipo)
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        resp = await client.post(
+            "https://api.notion.com/v1/pages",
+            headers={
+                "Authorization": f"Bearer {NOTION_TOKEN}",
+                "Notion-Version": "2022-06-28",
+                "Content-Type": "application/json",
+            },
+            json=payload,
+        )
+    if resp.status_code != 200:
+        logger.error("Notion API error %d: %s", resp.status_code, resp.text)
+        raise HTTPException(status_code=502, detail="Error al guardar el contacto")
+
+    logger.info("POST /api/contacto → guardado en Notion OK")
+    return {"message": "Mensaje enviado correctamente"}
 
 
 # ---- Stats ----
