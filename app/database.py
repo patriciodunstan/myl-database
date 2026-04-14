@@ -72,7 +72,8 @@ def execute_returning_id(sql, params=()):
 def get_cards(search=None, race=None, card_type=None, edition=None, rarity=None,
               cost_min=None, cost_max=None, damage_min=None, damage_max=None,
               sort="name", page=1, per_page=50):
-    """Get cards with filters and pagination."""
+    """Get cards grouped by name (one result per unique card, with printings list)."""
+    from collections import OrderedDict
     logger.info(
         "get_cards | search=%r race=%r type=%r edition=%r rarity=%r "
         "cost=[%s,%s] damage=[%s,%s] sort=%r page=%d per_page=%d",
@@ -119,24 +120,7 @@ def get_cards(search=None, race=None, card_type=None, edition=None, rarity=None,
     where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
     logger.debug("get_cards | conditions=%s | params=%s | joins=%r", conditions, params, joins)
 
-    # Count
-    count_sql = f"SELECT COUNT(*) as total FROM cards c {joins} {where}"
-    logger.debug("get_cards count_sql: %s | params=%s", count_sql.strip(), params)
-    total = query_one(count_sql, params)["total"]
-    logger.info("get_cards | total matching rows = %d", total)
-
-    # Sort
-    sort_map = {
-        "name": "c.name ASC",
-        "cost": "c.cost ASC",
-        "damage": "COALESCE(c.damage, 0) DESC",
-        "edition": "e.title ASC",
-    }
-    order = sort_map.get(sort, "c.name ASC")
-    if sort not in sort_map:
-        logger.warning("get_cards | sort=%r not in sort_map, defaulting to c.name ASC", sort)
-
-    offset = (page - 1) * per_page
+    # Fetch all matching rows sorted by name (grouping happens in Python)
     data_sql = f"""
         SELECT c.*, e.title as edition_title, e.slug as edition_slug,
                r.name as race_name, r.slug as race_slug,
@@ -149,15 +133,39 @@ def get_cards(search=None, race=None, card_type=None, edition=None, rarity=None,
         LEFT JOIN rarities ra ON c.rarity_id = ra.id
         {joins}
         {where}
-        ORDER BY {order}
-        LIMIT ? OFFSET ?
+        ORDER BY c.name ASC, c.id ASC
     """
-    logger.debug("get_cards data_sql: %s | params=%s", data_sql.strip(), params + [per_page, offset])
-    cards = query_all(data_sql, params + [per_page, offset])
-    logger.info("get_cards | returning %d cards (page %d, offset %d)", len(cards), page, offset)
+    logger.debug("get_cards data_sql: %s | params=%s", data_sql.strip(), params)
+    all_rows = query_all(data_sql, params)
+    logger.info("get_cards | fetched %d total rows before grouping", len(all_rows))
 
+    # Group by name — preserve insertion order (already name-sorted)
+    grouped: dict = OrderedDict()
+    for card in all_rows:
+        grouped.setdefault(card["name"], []).append(card)
+
+    # Build canonical card list: pick the printing with most data, then highest id
+    canonical_cards = []
+    for name, printings in grouped.items():
+        canonical = max(printings, key=lambda c: (1 if c.get("ability") else 0, c["id"]))
+        canonical["printings"] = printings
+        canonical_cards.append(canonical)
+
+    # Re-sort for non-name sorts (name order already correct from SQL)
+    if sort == "cost":
+        canonical_cards.sort(key=lambda c: (c["cost"] if c["cost"] is not None else 9999))
+    elif sort == "damage":
+        canonical_cards.sort(key=lambda c: (c["damage"] if c["damage"] is not None else -1), reverse=True)
+    elif sort == "edition":
+        canonical_cards.sort(key=lambda c: (c.get("edition_title") or ""))
+
+    total = len(canonical_cards)
+    offset = (page - 1) * per_page
+    page_cards = canonical_cards[offset:offset + per_page]
+
+    logger.info("get_cards | %d unique cards (page %d, returning %d)", total, page, len(page_cards))
     return {
-        "cards": cards,
+        "cards": page_cards,
         "total": total,
         "page": page,
         "per_page": per_page,
