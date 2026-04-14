@@ -3160,20 +3160,25 @@
                 loadAndRenderCards();
             });
 
-            // Filters
-            document.getElementById('apply-filters').addEventListener('click', async () => {
+            // Filters - apply on change for all dropdowns
+            const applyFiltersFromUI = async () => {
                 STATE.filters.race = document.getElementById('filter-race').value;
                 STATE.filters.type = document.getElementById('filter-type').value;
                 STATE.filters.edition = document.getElementById('filter-edition').value;
                 STATE.filters.rarity = document.getElementById('filter-rarity').value;
                 STATE.filters.costMin = document.getElementById('filter-cost-min').value ? parseInt(document.getElementById('filter-cost-min').value) : null;
                 STATE.filters.costMax = document.getElementById('filter-cost-max').value ? parseInt(document.getElementById('filter-cost-max').value) : null;
-                STATE.filters.powerMin = document.getElementById('filter-power-min').value ? parseInt(document.getElementById('filter-power-min').value) : null;
-                STATE.filters.powerMax = document.getElementById('filter-power-max').value ? parseInt(document.getElementById('filter-power-max').value) : null;
                 STATE.filters.sort = document.getElementById('filter-sort').value;
                 STATE.currentPage = 1;
                 await loadAndRenderCards();
-            });
+            };
+
+            document.getElementById('apply-filters').addEventListener('click', applyFiltersFromUI);
+            document.getElementById('filter-race').addEventListener('change', applyFiltersFromUI);
+            document.getElementById('filter-type').addEventListener('change', applyFiltersFromUI);
+            document.getElementById('filter-edition').addEventListener('change', applyFiltersFromUI);
+            document.getElementById('filter-rarity').addEventListener('change', applyFiltersFromUI);
+            document.getElementById('filter-sort').addEventListener('change', applyFiltersFromUI);
 
             document.getElementById('reset-filters').addEventListener('click', async () => {
                 document.getElementById('filter-race').value = '';
@@ -3214,18 +3219,18 @@
             document.getElementById('export-deck-btn').addEventListener('click', exportDeck);
             document.getElementById('validate-deck-btn').addEventListener('click', validateCurrentDeck);
 
-            // Deck builder search
+            // Deck builder search - incremental, all filters combine
             const debouncedDeckSearch = debounce(async () => {
-                const searchTerm = document.getElementById('deck-builder-search').value;
+                const searchTerm = document.getElementById('deck-builder-search').value.trim();
                 const type = document.getElementById('deck-filter-type').value;
                 const maxCost = document.getElementById('deck-filter-cost').value ? parseInt(document.getElementById('deck-filter-cost').value) : null;
 
-                const params = new URLSearchParams({
-                    search: searchTerm,
-                    type: type,
-                    cost_max: maxCost || '',
-                    per_page: 20
-                });
+                const paramsObj = { per_page: 50 };
+                if (searchTerm) paramsObj.search = searchTerm;
+                if (type) paramsObj.type = type;
+                if (maxCost !== null) paramsObj.cost_max = maxCost;
+
+                const params = new URLSearchParams(paramsObj);
 
                 try {
                     const data = await fetchAPI(`/cartas?${params}`);
