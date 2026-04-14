@@ -2787,7 +2787,7 @@
                 return;
             }
 
-            banlist.forEach(entry => {
+            data.banlist.forEach(entry => {
                 const row = document.createElement('tr');
                 const statusClass = entry.status === 'prohibited' ? 'prohibited' :
                                   entry.status === 'limited' ? 'limited' : 'unrestricted';
@@ -3213,7 +3213,7 @@
 
                 try {
                     const data = await fetchAPI(`/cartas?${params}`);
-                    renderDeckBuilderSearchResults(data.items || []);
+                    renderDeckBuilderSearchResults(data.cards || []);
                 } catch (error) {
                     console.error('Deck search error:', error);
                 }
