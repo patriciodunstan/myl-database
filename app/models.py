@@ -106,9 +106,10 @@ class Banlist(Base):
     restriction: Mapped[str] = mapped_column(String, nullable=False)
     updated: Mapped[str] = mapped_column(String, default="2026-04-07")
 
-    # Index
+    # Indexes + unique constraint for upsert
     __table_args__ = (
         Index("idx_banlist_format", "format"),
+        Index("idx_banlist_card_format", "card_name", "format", unique=True),
     )
 
 

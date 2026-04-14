@@ -6,12 +6,10 @@ Run with: python -m seed
 """
 
 import asyncio
-import json
-import time
-import urllib.request
-import urllib.error
+import sys
 from typing import List, Dict
 
+import httpx
 from sqlalchemy import select, func
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine, AsyncSession
@@ -100,17 +98,17 @@ BANLIST = {
 API_BASE = "https://api.myl.cl"
 
 
-def fetch_json(url, retries=3):
-    """Fetch JSON from URL with retry logic."""
+async def fetch_json(client: httpx.AsyncClient, url: str, retries: int = 3) -> dict | None:
+    """Fetch JSON from URL with retry logic (async, non-blocking)."""
     for attempt in range(retries):
         try:
-            req = urllib.request.Request(url, headers={"User-Agent": "MyL-Seed/1.0"})
-            with urllib.request.urlopen(req, timeout=30) as resp:
-                return json.loads(resp.read().decode("utf-8"))
-        except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError) as e:
-            wait = (2 ** attempt)
+            resp = await client.get(url, timeout=30.0)
+            resp.raise_for_status()
+            return resp.json()
+        except (httpx.HTTPStatusError, httpx.RequestError) as e:
+            wait = 2 ** attempt
             print(f"    Retry {attempt+1}/{retries} after error: {e} (waiting {wait}s)")
-            time.sleep(wait)
+            await asyncio.sleep(wait)
     return None
 
 
@@ -170,8 +168,10 @@ async def insert_edition(session, edition_data):
 
 
 async def insert_cards(session, cards, edition_id):
-    """Insert card records for an edition."""
+    """Insert card records for an edition. Uses Card.id (PK) for conflict resolution."""
     inserted = 0
+    failed = 0
+
     for card in cards:
         try:
             cost = int(card["cost"]) if card.get("cost") else None
@@ -183,26 +183,32 @@ async def insert_cards(session, cards, edition_id):
         except (ValueError, TypeError):
             damage = None
 
-        stmt = insert(Card).values(
-            id=int(card["id"]),
-            edid=card.get("edid", ""),
-            slug=card["slug"],
-            name=card["name"],
-            edition_id=edition_id,
-            race_id=int(card["race"]) if card.get("race") else None,
-            type_id=int(card["type"]) if card.get("type") else None,
-            rarity_id=int(card["rarity"]) if card.get("rarity") else None,
-            cost=cost,
-            damage=damage,
-            ability=card.get("ability", ""),
-            flavour=card.get("flavour", ""),
-            keywords=card.get("keywords", ""),
-            image_path=None,  # Images are proxied from remote
-        ).on_conflict_do_nothing(index_elements=[Card.id, Card.slug, Card.edition_id])
-        await session.execute(stmt)
-        inserted += 1
+        try:
+            stmt = insert(Card).values(
+                id=int(card["id"]),
+                edid=card.get("edid", ""),
+                slug=card["slug"],
+                name=card["name"],
+                edition_id=edition_id,
+                race_id=int(card["race"]) if card.get("race") else None,
+                type_id=int(card["type"]) if card.get("type") else None,
+                rarity_id=int(card["rarity"]) if card.get("rarity") else None,
+                cost=cost,
+                damage=damage,
+                ability=card.get("ability", ""),
+                flavour=card.get("flavour", ""),
+                keywords=card.get("keywords", ""),
+                image_path=None,
+            ).on_conflict_do_nothing(index_elements=[Card.id])
+            await session.execute(stmt)
+            inserted += 1
+        except Exception as e:
+            failed += 1
+            print(f"    ERROR inserting card {card.get('name', '?')} (id={card.get('id')}): {e}")
 
     await session.commit()
+    if failed > 0:
+        print(f"    WARNING: {failed} cards failed to insert")
     return inserted
 
 
@@ -228,7 +234,8 @@ async def main():
     print("=" * 60)
 
     settings = config.get_settings()
-    print(f"Database URL: {settings.database_url}")
+    db_display = settings.database_url[:50] + "..." if settings.database_url else "(empty)"
+    print(f"Database URL: {db_display}")
 
     # Create tables
     print("\nCreating tables...")
@@ -236,47 +243,51 @@ async def main():
         await conn.run_sync(Base.metadata.create_all)
     print("Tables created.")
 
-    # Check if already seeded
+    # Check if already seeded — use CARD count, not edition count
     async with async_session_factory() as session:
-        edition_count = await session.scalar(select(func.count(Edition.id)))
-        if edition_count and edition_count > 0:
-            print(f"\nDatabase already has {edition_count} editions. Skipping seed.")
+        card_count = await session.scalar(select(func.count(Card.id)))
+        if card_count and card_count > 100:
+            print(f"\nDatabase already has {card_count} cards. Skipping seed.")
             return
 
-    # Download and insert data
+    # Download and insert data using async httpx client
     total_cards = 0
     ref_data_loaded = False
 
-    for i, slug in enumerate(EDITION_SLUGS):
-        print(f"\n[{i+1}/{len(EDITION_SLUGS)}] Downloading: {slug}")
+    async with httpx.AsyncClient(
+        headers={"User-Agent": "MyL-Seed/2.0"},
+        follow_redirects=True,
+    ) as client:
+        for i, slug in enumerate(EDITION_SLUGS):
+            print(f"\n[{i+1}/{len(EDITION_SLUGS)}] Downloading: {slug}")
 
-        url = f"{API_BASE}/cards/edition/{slug}"
-        data = fetch_json(url)
+            url = f"{API_BASE}/cards/edition/{slug}"
+            data = await fetch_json(client, url)
 
-        if not data or data.get("code") != 200:
-            print(f"  ERROR: Could not fetch {slug}")
-            continue
+            if not data or data.get("code") != 200:
+                print(f"  ERROR: Could not fetch {slug}")
+                continue
 
-        cards = data.get("cards", [])
-        if not cards:
-            print(f"  NO CARDS: {slug} (0 cards)")
-            continue
+            cards = data.get("cards", [])
+            if not cards:
+                print(f"  NO CARDS: {slug} (0 cards)")
+                continue
 
-        edition_data = data.get("edition", {})
-        edition_id = int(edition_data["id"])
-        title = edition_data.get("title", slug)
+            edition_data = data.get("edition", {})
+            edition_id = int(edition_data["id"])
+            title = edition_data.get("title", slug)
 
-        async with async_session_factory() as session:
-            # Insert reference data from first successful response
-            if not ref_data_loaded:
-                await insert_reference_data(session, data)
-                ref_data_loaded = True
+            async with async_session_factory() as session:
+                # Insert reference data from first successful response
+                if not ref_data_loaded:
+                    await insert_reference_data(session, data)
+                    ref_data_loaded = True
 
-            await insert_edition(session, edition_data)
-            inserted = await insert_cards(session, cards, edition_id)
-            print(f"  {title}: {inserted} cards inserted")
+                await insert_edition(session, edition_data)
+                inserted = await insert_cards(session, cards, edition_id)
+                print(f"  {title}: {inserted} cards inserted")
 
-        total_cards += inserted
+            total_cards += inserted
 
     # Insert banlist
     print("\nInserting banlist for Racial Edicion (Abril 2026)...")
@@ -285,19 +296,25 @@ async def main():
 
     # Final stats
     async with async_session_factory() as session:
-        edition_count = await session.scalar(select(Edition.id))
-        cards_count = await session.scalar(select(Card.id))
-        banlist_count = await session.scalar(select(Banlist.id))
+        edition_count = await session.scalar(select(func.count(Edition.id)))
+        cards_count = await session.scalar(select(func.count(Card.id)))
+        banlist_count = await session.scalar(select(func.count(Banlist.id)))
 
     print("\n" + "=" * 60)
-    print("SUMMARY")
+    print("SEED COMPLETE")
     print("=" * 60)
     print(f"  Editions processed: {len(EDITION_SLUGS)}")
     print(f"  Editions in DB:      {edition_count}")
-    print(f"  Cards inserted:       {cards_count}")
-    print(f"  Cards in banlist:    {banlist_count}")
+    print(f"  Cards in DB:         {cards_count}")
+    print(f"  Banlist entries:     {banlist_count}")
     print("=" * 60)
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except Exception as e:
+        print(f"\nFATAL: Seed failed with error: {e}", file=sys.stderr)
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)
