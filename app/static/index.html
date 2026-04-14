@@ -3107,7 +3107,7 @@
             showToast('info', 'Nuevo Mazo', 'Comienza a construir tu mazo');
         }
 
-        function selectDeck(deckId) {
+        async function selectDeck(deckId) {
             if (!deckId) {
                 STATE.currentDeck = {
                     id: null,
@@ -3120,11 +3120,23 @@
                 return;
             }
 
-            const deck = STATE.decks.find(d => d.id === deckId);
-            if (deck) {
-                STATE.currentDeck = { ...deck };
-                renderDeckList();
-                showToast('info', 'Mazo cargado', deck.name);
+            try {
+                const deck = await fetchAPI(`/mazos/${deckId}`);
+                if (deck) {
+                    // Transform cards from API format to internal format
+                    STATE.currentDeck = {
+                        ...deck,
+                        cards: (deck.cards || []).map(c => ({
+                            card_id: c.id,
+                            quantity: c.quantity,
+                            card: c
+                        }))
+                    };
+                    renderDeckList();
+                    showToast('info', 'Mazo cargado', deck.name);
+                }
+            } catch (error) {
+                showToast('error', 'Error', 'No se pudo cargar el mazo');
             }
         }
 
