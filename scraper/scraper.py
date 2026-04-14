@@ -70,8 +70,11 @@ BANLIST = {
         "Furia Irracional", "Tebas", "Baal-Zaphon", "Bennu", "Qer-Her",
         "Marmita Druida", "Kobold",
     ],
+    "sin_restriccion": [
+        "Mercaderes",
+    ],
     "limitada_2": [
-        "Mercaderes", "Ma'arrat an-Numan", "Fe sin Limite", "Idmon el Adivino",
+        "Ma'arrat an-Numan", "Fe sin Limite", "Idmon el Adivino",
         "Alejandro Magno", "Afrodita", "Corona del Dia", "Haquika", "Zagreus",
         "Papiros de Lahun", "Morir de Pie", "Helios", "Amergin el Druida",
         "Red de Plata", "Cantobele", "La Iliada", "Kamose el Guerrero",

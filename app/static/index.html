@@ -2896,6 +2896,10 @@
                     statusClass = 'limited';
                     statusText = 'Limitada';
                     limitText = '2';
+                } else if (entry.restriction === 'sin_restriccion') {
+                    statusClass = 'unrestricted';
+                    statusText = 'Desrestringida';
+                    limitText = '3';
                 } else {
                     statusClass = 'unrestricted';
                     statusText = 'Sin restricción';
