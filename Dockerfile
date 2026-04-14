@@ -6,18 +6,12 @@ WORKDIR /app
 COPY app/requirements.txt /app/requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy scraper first (rarely changes)
-COPY scraper/ /app/scraper/
-
-# Create data directory
-RUN mkdir -p /app/scraper/data/images
+# Copy app
+COPY app/ /app/app/
 
 # Copy entrypoint
 COPY entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh
-
-# Copy app LAST (changes most frequently - avoids cache)
-COPY app/ /app/app/
 
 EXPOSE 8000
 
