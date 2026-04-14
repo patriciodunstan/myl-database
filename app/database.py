@@ -147,7 +147,7 @@ def get_cards(search=None, race=None, card_type=None, edition=None, rarity=None,
     # Build canonical card list: pick the printing with most data, then highest id
     canonical_cards = []
     for name, printings in grouped.items():
-        canonical = max(printings, key=lambda c: (1 if c.get("ability") else 0, c["id"]))
+        canonical = dict(max(printings, key=lambda c: (1 if c.get("ability") else 0, c["id"])))
         canonical["printings"] = printings
         canonical_cards.append(canonical)
 
