@@ -5,8 +5,7 @@ from pathlib import Path
 from typing import Optional
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Query, HTTPException
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, Response
+from fastapi.responses import Response
 from fastapi.middleware.cors import CORSMiddleware
 import database as db
 import httpx
@@ -46,19 +45,8 @@ app.add_middleware(
 )
 
 # Paths
-STATIC_DIR = Path(__file__).parent / "static"
-# Images are now served from remote URL (proxy fallback) - no local storage needed
+# Images are served from remote URL (proxy fallback) - no local storage needed
 IMAGES_DIR = Path(__file__).parent.parent / "scraper" / "data" / "images"  # For backward compatibility, not used
-
-
-# ---- Static files ----
-app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
-
-
-@app.get("/")
-async def index():
-    logger.debug("GET / → serving index.html")
-    return FileResponse(str(STATIC_DIR / "index.html"))
 
 
 @app.get("/images/{path:path}")
