@@ -1,7 +1,5 @@
 """MyL Primer Bloque Extendido - FastAPI Backend."""
-import os
 import logging
-from pathlib import Path
 from typing import Optional
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Query, HTTPException
@@ -44,26 +42,18 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Paths
-# Images are served from remote URL (proxy fallback) - no local storage needed
-IMAGES_DIR = Path(__file__).parent.parent / "scraper" / "data" / "images"  # For backward compatibility, not used
-
-
 @app.get("/images/{path:path}")
 async def serve_image(path: str):
-    img_path = IMAGES_DIR / path
-    if img_path.exists():
-        logger.debug("GET /images/%s → local file", path)
-        return FileResponse(str(img_path))
+    """Proxy card images from api.myl.cl."""
     remote_url = f"https://api.myl.cl/static/cards/{path}"
-    logger.info("GET /images/%s → not found locally, proxying from %s", path, remote_url)
+    logger.debug("GET /images/%s → proxying from %s", path, remote_url)
     async with httpx.AsyncClient(timeout=15.0) as client:
         try:
             resp = await client.get(remote_url)
             if resp.status_code == 200:
-                logger.debug("GET /images/%s → proxy OK (%d bytes)", path, len(resp.content))
+                logger.debug("GET /images/%s → OK (%d bytes)", path, len(resp.content))
                 return Response(content=resp.content, media_type="image/png")
-            logger.warning("GET /images/%s → proxy returned status %d", path, resp.status_code)
+            logger.warning("GET /images/%s → upstream status %d", path, resp.status_code)
         except httpx.HTTPError as exc:
             logger.error("GET /images/%s → proxy error: %s", path, exc)
     raise HTTPException(status_code=404, detail="Imagen no encontrada")
