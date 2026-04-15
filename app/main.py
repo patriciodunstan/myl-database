@@ -3,7 +3,7 @@ import logging
 from typing import Optional
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Query, HTTPException
-from fastapi.responses import Response
+from fastapi.responses import Response, RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
 import database as db
 import httpx
@@ -41,6 +41,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+@app.get("/")
+async def root():
+    return RedirectResponse(url="https://myl-frontend-production.up.railway.app/")
+
 
 @app.get("/images/{path:path}")
 async def serve_image(path: str):
