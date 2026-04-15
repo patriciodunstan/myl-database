@@ -608,6 +608,8 @@ async def simulate_draw(deck_id=None, cards=None):
                 "race_name": c.get("race_name"),
                 "edition_title": c.get("edition_title"),
                 "image_path": c.get("image_path"),
+                "edition_id": c.get("edition_id"),
+                "edid": c.get("edid"),
             }
             for c in hand
         ],
