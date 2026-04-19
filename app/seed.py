@@ -7,7 +7,6 @@ Run with: python -m seed
 
 import asyncio
 import sys
-from typing import List, Dict
 
 import httpx
 from sqlalchemy import select, func
@@ -15,7 +14,6 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine, AsyncSession
 
 import config
-import models
 
 from models import Base, Edition, Race, Type, Rarity, Card, Banlist
 

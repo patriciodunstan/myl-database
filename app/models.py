@@ -1,6 +1,6 @@
 """SQLAlchemy 2.0 ORM models for MyL database."""
 from datetime import datetime
-from sqlalchemy import String, Integer, Text, DateTime, Boolean, ForeignKey, Index, func
+from sqlalchemy import String, Integer, Text, DateTime, ForeignKey, Index, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 

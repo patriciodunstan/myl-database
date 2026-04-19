@@ -1,40 +1,15 @@
 """Database connection and queries for MyL card database using SQLAlchemy 2.0 async."""
 import logging
 from collections import OrderedDict
-from typing import Optional, Dict, List, Any
+from typing import Dict, List, Any, AsyncGenerator
 
-from sqlalchemy import select, func, delete, update
+from sqlalchemy import select, func, delete
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import selectinload
 
 import config
-import models
 
 from models import Base, Card, Edition, Race, Type, Rarity, Banlist, Deck, DeckCard
-
-
-logger = logging.getLogger(__name__)
-
-settings = config.get_settings()
-
-# Convert postgresql:// to postgresql+asyncpg:// for async
-database_url = settings.database_url.replace("postgresql://", "postgresql+asyncpg://")
-
-# Async engine and session factory
-engine = create_async_engine(
-    database_url,
-    echo=settings.debug,
-    pool_pre_ping=True,
-)
-
-async_session_factory = async_sessionmaker(
-    engine,
-    class_=AsyncSession,
-    expire_on_commit=False,
-)
-
-
-from typing import AsyncGenerator
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
     """Get database session."""
@@ -92,17 +67,16 @@ async def get_cards(
     )
 
     conditions = []
-    params = {}
     joins = []
 
     if search:
         conditions.append(Card.name.like(f"%{search}%"))
     if race:
         joins.append((Race, Card.race_id == Race.id))
-        conditions.append(Race.name == race)
+        conditions.append(Race.name.ilike(race))
     if card_type:
         joins.append((Type, Card.type_id == Type.id))
-        conditions.append(Type.name == card_type)
+        conditions.append(Type.name.ilike(card_type))
     if edition:
         joins.append((Edition, Card.edition_id == Edition.id))
         conditions.append(Edition.slug == edition)

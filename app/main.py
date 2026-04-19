@@ -1,5 +1,6 @@
 """MyL Primer Bloque Extendido - FastAPI Backend."""
 import logging
+import os
 from typing import Optional
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Query, HTTPException
