@@ -1,0 +1,56 @@
+name: CI/CD
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          pip install -r app/requirements.txt
+          pip install ruff bandit pip-audit mypy
+
+      - name: Lint with ruff
+        run: ruff check app/ --output-format=github
+
+      - name: Type check with mypy
+        run: mypy app/ --ignore-missing-imports --no-error-summary || true
+        continue-on-error: true  # Don't block CI on type errors initially
+
+      - name: Security scan with bandit
+        run: bandit -r app/ -ll -ii -f json -o bandit-report.json || true
+        continue-on-error: true  # Report but don't block
+
+      - name: Dependency vulnerability audit
+        run: pip-audit -r app/requirements.txt || true
+        continue-on-error: true
+
+      - name: Docker build validation
+        run: docker build -t myl-database .
+
+  deploy:
+    needs: ci
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Railway CLI
+        run: npm install -g @railway/cli
+
+      - name: Deploy to Railway
+        run: railway up --service myl-database
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
