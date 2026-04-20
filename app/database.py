@@ -11,6 +11,29 @@ import config
 
 from models import Base, Card, Edition, Race, Type, Rarity, Banlist, Deck, DeckCard
 
+# Module-level logging
+logger = logging.getLogger(__name__)
+
+# Database settings
+settings = config.get_settings()
+
+# Convert postgresql:// to postgresql+asyncpg:// for async
+database_url = settings.database_url.replace("postgresql://", "postgresql+asyncpg://")
+
+# Async engine and session factory
+engine = create_async_engine(
+    database_url,
+    echo=settings.debug,
+    pool_pre_ping=True,
+)
+
+async_session_factory = async_sessionmaker(
+    engine,
+    class_=AsyncSession,
+    expire_on_commit=False,
+)
+
+
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
     """Get database session."""
     logger.debug("Opening DB connection")
